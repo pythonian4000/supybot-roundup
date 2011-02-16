@@ -1,13 +1,13 @@
-This plugin supports querying Bugzilla installations, showing details about
-bugs, and reading bugmails sent from Bugzilla to show updates in an IRC
-channel. It supports working with multiple Bugzilla installations and can
+This plugin supports querying Roundup installations, showing details about
+bugs, and reading bugmails sent from Roundup to show updates in an IRC
+channel. It supports working with multiple Roundup installations and can
 work across many channels and networks.
 
-The main commands you'll be interested in at first are "Bugzilla add", and
+The main commands you'll be interested in at first are "Roundup add", and
 then "query" and "bug". Then you should set the
-plugins.Bugzilla.defaultBugzilla configuration parameter.
+plugins.Roundup.defaultRoundup configuration parameter.
 
-You will probably also want to enable plugins.Bugzilla.bugSnarfer, which
+You will probably also want to enable plugins.Roundup.bugSnarfer, which
 catches the words "bug" and "attachment" in regular IRC conversation and
 displays details about that bug or attachment.
 

@@ -1,5 +1,6 @@
 ###
 # Copyright (c) 2007, Max Kanat-Alexander
+# Copyright (c) 2011, Jack Grigg
 # All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
@@ -155,13 +156,13 @@ def _getXmlText(node):
     except:
         return ''
 
-####################################################
-# Classes and Utilities for Bugzilla Installations #
-####################################################
+###################################################
+# Classes and Utilities for Roundup Installations #
+###################################################
 
 # XXX This has to come back into use.
 def _aliasAlreadyInUse(v):
-    allInstalls  = conf.supybot.plugins.Bugzilla.bugzillas._children
+    allInstalls  = conf.supybot.plugins.Roundup.roundups._children
     allAliases = allInstalls.keys()[:]
     for name, group in allInstalls.iteritems():
         allAliases.extend(group.aliases())
@@ -170,8 +171,8 @@ def _aliasAlreadyInUse(v):
     if v in allAliases: return True
     return False
 
-class BugzillaName(registry.String):
-    """Bugzilla names must contain only alphabetical characters
+class RoundupName(registry.String):
+    """Roundup names must contain only alphabetical characters
     and must not already be in use by some other installation."""
     def setValue(self, v):
         v = v.lower()
@@ -179,18 +180,18 @@ class BugzillaName(registry.String):
             self.error()
         registry.String.setValue(self, v)
 
-class BugzillaNames(registry.SpaceSeparatedListOfStrings):
-    Value = BugzillaName
+class RoundupNames(registry.SpaceSeparatedListOfStrings):
+    Value = RoundupName
 
-def registerBugzilla(name, url=''):
+def registerRoundup(name, url=''):
     if (not re.match('\w+$', name)):
-        s = utils.str.normalizeWhitespace(BugzillaName.__doc__)
+        s = utils.str.normalizeWhitespace(RoundupName.__doc__)
         raise registry.InvalidRegistryValue("%s (%s)" % (s, name))
 
-    install = conf.registerGroup(conf.supybot.plugins.Bugzilla.bugzillas,
+    install = conf.registerGroup(conf.supybot.plugins.Roundup.roundups,
                                  name.lower())
     conf.registerGlobalValue(install, 'url',
-        registry.String(url, """Determines the URL to this Bugzilla
+        registry.String(url, """Determines the URL to this Roundup
         installation. This must be identical to the urlbase (or sslbase)
         parameter used by the installation. (The url that shows up in 
         emails.) It must end with a forward slash."""))
@@ -199,7 +200,7 @@ def registerBugzilla(name, url=''):
         """Additional search terms in QuickSearch format, that will be added to
         every search done with "query" against this installation."""))
 #    conf.registerGlobalValue(install, 'aliases',
-#        BugzillaNames([], """Alternate names for this Bugzilla
+#        RoundupNames([], """Alternate names for this Roundup
 #        installation. These must be globally unique."""))
 
     conf.registerGroup(install, 'watchedItems', orderAlphabetically=True)
@@ -224,7 +225,7 @@ def registerBugzilla(name, url=''):
     
     conf.registerGroup(install, 'traces')
     conf.registerChannelValue(install.traces, 'report',
-        registry.Boolean(False, """Some Bugzilla installations have gdb
+        registry.Boolean(False, """Some Roundup installations have gdb
         stack traces in comments. If you turn this on, the bot will report
         some basic details of any trace that shows up in the comments of
         a new bug."""))
@@ -241,11 +242,11 @@ def registerBugzilla(name, url=''):
         registry.PositiveInteger(5, """How many stack frames should be
         reported from the crash?"""))
 
-class BugzillaNotFound(registry.NonExistentRegistryEntry):
+class RoundupNotFound(registry.NonExistentRegistryEntry):
     pass
 
-class BugzillaInstall:
-    """Represents a single Bugzilla."""
+class RoundupInstall:
+    """Represents a single Roundup."""
 
     '''Words that describe each flag status except "requested."'''
     status_words = { '+' : 'granted', '-' : 'denied', 
@@ -253,9 +254,9 @@ class BugzillaInstall:
 
     def __init__(self, plugin, name):
         try:
-            self.conf = conf.supybot.plugins.Bugzilla.bugzillas.get(name.lower())
+            self.conf = conf.supybot.plugins.Roundup.roundups.get(name.lower())
         except registry.NonExistentRegistryEntry:
-            raise BugzillaNotFound, 'No Bugzilla called %s' % name
+            raise RoundupNotFound, 'No Roundup called %s' % name
         self.url  = self.conf.url()
         self.name = name
         #self.aliases = self.conf.aliases()
@@ -264,7 +265,7 @@ class BugzillaInstall:
 
     def query(self, terms, total, channel, limit=None):
         # Build the query URL
-        baseTerms = self.plugin.registryValue('bugzillas.%s.queryTerms' \
+        baseTerms = self.plugin.registryValue('roundups.%s.queryTerms' \
                                               % self.name , channel)
         fullTerms = "%s %s" % (terms, baseTerms)
         fullTerms = fullTerms.strip()
@@ -470,7 +471,7 @@ class BugzillaInstall:
                  for l in lines]
 
         if (bug.new and bug.comment and self.plugin.registryValue(\
-            'bugzillas.%s.traces.report' % self.name, channel)):
+            'roundups.%s.traces.report' % self.name, channel)):
             try:
                 trace = traceparser.Trace(bug.comment)
                 line = self._traceLine(trace, channel)
@@ -567,15 +568,15 @@ class BugzillaInstall:
                 break
             
         if not interesting: fIndex = 0
-            #for f in self.plugin.registryValue('bugzillas.%s.traces.crashStarts'
+            #for f in self.plugin.registryValue('roundups.%s.traces.crashStarts'
             #                                   % self.name, channel):
             #    fIndex = thread.functionIndex(f)
                 
         funcs = []
         maxFrames = self.plugin.registryValue(\
-            'bugzillas.%s.traces.frameLimit' % self.name, channel)
+            'roundups.%s.traces.frameLimit' % self.name, channel)
         ignoreFuncs = self.plugin.registryValue(\
-            'bugzillas.%s.traces.ignoreFunctions' % self.name, channel)
+            'roundups.%s.traces.ignoreFunctions' % self.name, channel)
         usedFrames = 0
         for frame in usedThread[fIndex:]:
             if frame.function() == '' or frame.function() in ignoreFuncs:
@@ -600,11 +601,11 @@ class BugzillaInstall:
         irc.queueMsg(msg)
    
     def reportFor(self, channel):
-        return self.plugin.registryValue('bugzillas.%s.reportedChanges' \
+        return self.plugin.registryValue('roundups.%s.reportedChanges' \
                                          % self.name, channel)
    
     def _shouldAnnounceBugInChannel(self, bug, channel):
-        if self.plugin.registryValue('bugzillas.%s.watchedItems.all' \
+        if self.plugin.registryValue('roundups.%s.watchedItems.all' \
                                      % self.name, channel):
             return True
         
@@ -624,7 +625,7 @@ class BugzillaInstall:
                 # etc.
                 try:
                     watch_list = self.plugin.registryValue(
-                        'bugzillas.%s.watchedItems.%s' % (self.name, field), channel)
+                        'roundups.%s.watchedItems.%s' % (self.name, field), channel)
                     if value in watch_list: return True
                 except registry.NonExistentRegistryEntry:
                     continue
@@ -672,9 +673,9 @@ class BugzillaInstall:
 # Plugin #
 ##########
 
-class Bugzilla(callbacks.PluginRegexp):
-    """This plugin provides the ability to interact with Bugzilla installs.
-    It can report changes from multiple Bugzillas by parsing emails, and it can
+class Roundup(callbacks.PluginRegexp):
+    """This plugin provides the ability to interact with Roundup installs.
+    It can report changes from multiple Roundups by parsing emails, and it can
     report the details of bugs and attachments to your channel."""
 
     threaded = True
@@ -683,7 +684,7 @@ class Bugzilla(callbacks.PluginRegexp):
     unaddressedRegexps = ['snarfBug']
 
     def __init__(self, irc):
-        self.__parent = super(Bugzilla, self)
+        self.__parent = super(Roundup, self)
         self.__parent.__init__(irc)
         self.saidBugs = ircutils.IrcDict()
         self.saidAttachments = ircutils.IrcDict()
@@ -694,8 +695,8 @@ class Bugzilla(callbacks.PluginRegexp):
         period = self.registryValue('mboxPollTimeout')
         schedule.addPeriodicEvent(self._pollMbox, period, name=self.name(),
                                   now=False)
-        for name in self.registryValue('bugzillas'):
-            registerBugzilla(name)
+        for name in self.registryValue('roundups'):
+            registerRoundup(name)
         reload(sys)
         sys.setdefaultencoding('utf-8')
 
@@ -705,16 +706,16 @@ class Bugzilla(callbacks.PluginRegexp):
 
     def add(self, irc, msg, args, name, url):
         """<name> <url>
-        Lets the bot know about a new Bugzilla installation that it can
+        Lets the bot know about a new Roundup installation that it can
         interact with. Name is the name that you use most commonly to refer
         to this installation--it must not have any spaces. URL is the
         urlbase (or sslbase, if the installation uses that) of the
         installation."""
 
-        registerBugzilla(name, url)
-        bugzillas = self.registryValue('bugzillas')
-        bugzillas.append(name.lower())
-        self.setRegistryValue('bugzillas', bugzillas)
+        registerRoundup(name, url)
+        roundups = self.registryValue('roundups')
+        roundups.append(name.lower())
+        self.setRegistryValue('roundups', roundups)
         irc.replySuccess()
     add = wrap(add, ['admin', 'somethingWithoutSpaces','url'])
              
@@ -725,7 +726,7 @@ class Bugzilla(callbacks.PluginRegexp):
         of more than one attachment."""
 
         channel = msg.args[0]
-        installation = self._defaultBz(channel)
+        installation = self._defaultRu(channel)
         lines = installation.getAttachments(attach_ids, channel)
         for l in lines: irc.reply(l)
     attachment = wrap(attachment, [many(('id','attachment'))])
@@ -739,7 +740,7 @@ class Bugzilla(callbacks.PluginRegexp):
         channel = msg.args[0]
         bug_ids = re.split('[!?.,\(\)\s]|[\b\W]and[\b\W]*|\bbug\b', 
                            bug_id_string)
-        installation = self._defaultBz(channel)
+        installation = self._defaultRu(channel)
         bug_strings = installation.getBugs(bug_ids, channel)
         for s in bug_strings:
             irc.reply(s)
@@ -747,7 +748,7 @@ class Bugzilla(callbacks.PluginRegexp):
 
     def query(self, irc, msg, args, options, query_string):
         """[--total] [--install=<install name>] <search terms>
-        Searches your Bugzilla using the QuickSearch syntax, and returns
+        Searches your Roundup using the QuickSearch syntax, and returns
         a certain number of results.
         
         --install specifies the name of an installation to search, instead
@@ -758,14 +759,14 @@ class Bugzilla(callbacks.PluginRegexp):
 
         channel = msg.args[0]
         total   = False
-        installation = self._defaultBz(channel)
+        installation = self._defaultRu(channel)
         for opt in options:
             if opt[0] == 'total': total = True
             if opt[0] == 'install':
                 name = opt[1]
                 try:
-                    installation = BugzillaInstall(self, name)
-                except BugzillaNotFound:
+                    installation = RoundupInstall(self, name)
+                except RoundupNotFound:
                     irc.error("No install named '%s'" % name)
                     return
         
@@ -796,7 +797,7 @@ class Bugzilla(callbacks.PluginRegexp):
         if not ids: return
 
         self.log.debug('Install: %r' % match.group('install'))
-        installation = self._bzOrDefault(match.group('install'), channel)
+        installation = self._ruOrDefault(match.group('install'), channel)
         if type.lower() == 'bug': 
             strings = installation.getBugs(ids, channel)
         else: 
@@ -814,36 +815,36 @@ class Bugzilla(callbacks.PluginRegexp):
         bug_ids =  match.group('bug').split()
         self.log.debug('Snarfed Bug IDs from URL: ' + ' '.join(bug_ids))
         try:
-            installation = self._bzByUrl(url)
-        except BugzillaNotFound:
-            installation = self._defaultBz(channel)
+            installation = self._ruByUrl(url)
+        except RoundupNotFound:
+            installation = self._defaultRu(channel)
         bug_strings = installation.getBugs(bug_ids, channel, show_url=False)
         for s in bug_strings:
             irc.reply(s, prefixNick=False)
     
-    def _bzOrDefault(self, name, channel):
+    def _ruOrDefault(self, name, channel):
         if name is None:
-            return self._defaultBz(channel)
+            return self._defaultRu(channel)
         
         try:
-            bz = BugzillaInstall(self, name)
-        except BugzillaNotFound:
-            bz = self._defaultBz(channel)
+            bz = RoundupInstall(self, name)
+        except RoundupNotFound:
+            bz = self._defaultRu(channel)
             
         return bz
     
-    def _defaultBz(self, channel=None):
-        name = self.registryValue('defaultBugzilla', channel)
-        return BugzillaInstall(self, name)
+    def _defaultRu(self, channel=None):
+        name = self.registryValue('defaultRoundup', channel)
+        return RoundupInstall(self, name)
             
-    def _bzByUrl(self, url):
+    def _ruByUrl(self, url):
         domainMatch = re.match('https?://(\S+)/', url, re.I)
         domain = domainMatch.group(1)
-        installs = self.registryValue('bugzillas', value=False)
+        installs = self.registryValue('roundups', value=False)
         for name, group in installs._children.iteritems():
             if group.url().lower().find(domain.lower()) > -1:
-                return BugzillaInstall(self, name)
-        raise BugzillaNotFound, 'No Bugzilla with URL %s' % url
+                return RoundupInstall(self, name)
+        raise RoundupNotFound, 'No Roundup with URL %s' % url
         
     def _formatLine(self, line, channel, type):
         """Implements the 'format' configuration options."""
@@ -916,13 +917,13 @@ class Bugzilla(callbacks.PluginRegexp):
     def _handleBugmails(self, bugmails):
         for mail in bugmails:
             try:
-                installation = self._bzByUrl(mail.urlbase)
-            except BugzillaNotFound:
-                installation = self._defaultBz()
+                installation = self._ruByUrl(mail.urlbase)
+            except RoundupNotFound:
+                installation = self._defaultRu()
             self.log.debug('Handling bugmail for bug %s on %s (%s)' \
                            % (mail.bug_id, mail.urlbase, installation.name))
             installation.handleBugmail(mail)
 
-Class = Bugzilla
+Class = Roundup
 
 # vim:set shiftwidth=4 tabstop=4 expandtab textwidth=79:

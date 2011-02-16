@@ -52,8 +52,8 @@ MULTI_FIELDS = ['CC', 'Group', 'Keywords', 'Blocks', 'Depends on']
 UNWRAP_WHAT = [re.compile('^Attachment .\d+$'), re.compile('^OtherBugsDep'),
                re.compile('^Attachment .\d+ is')]
 
-'''Should be whatever Bugzilla::Util::find_wrap_point (or FindWrapPoint) 
-   breaks on, in Bugzilla.'''
+'''Should be whatever Roundup::Util::find_wrap_point (or FindWrapPoint) 
+   breaks on, in Roundup.'''
 BREAKING_CHARACTERS = [' ',',','-']
 
 # The maximum width, in characters, of each field of the "diffs" table.
@@ -260,8 +260,8 @@ class Bugmail:
                    re.compile('^Attachment .\d+ is'), 
                    re.compile('^OtherBugsDep')]
 
-    '''Should be whatever Bugzilla::Util::find_wrap_point (or FindWrapPoint) 
-       breaks on, in Bugzilla.'''
+    '''Should be whatever Roundup::Util::find_wrap_point (or FindWrapPoint) 
+       breaks on, in Roundup.'''
     BREAKING_CHARACTERS = [' ',',','-']
 
     # The maximum width, in characters, of each field of the "diffs" table.
@@ -271,20 +271,20 @@ class Bugmail:
 
     def __init__(self, message):
         # Make sure this is actually a bug mail
-        if not message['X-Bugzilla-Product']:
-            raise NotBugmailException, 'Email lacks X-Bugzilla-Product header'
+        if not message['X-Roundup-Product']:
+            raise NotBugmailException, 'Email lacks X-Roundup-Product header'
         # Initialize fields used lower that aren't always set
         self.dupe_of = None
         self.attach_id = None
 
         # Basic Header Fields
-        self.changer   = _get_header(message['X-Bugzilla-Who'])
-        self.product   = _get_header(message['X-Bugzilla-Product'])
-        self.component = _get_header(message['X-Bugzilla-Component'])
-        self.status    = _get_header(message['X-Bugzilla-Status'])
-        self.severity  = _get_header(message['X-Bugzilla-Severity'])
-        self.priority  = _get_header(message['X-Bugzilla-Priority'])
-        self.assignee  = _get_header(message['X-Bugzilla-Assigned-To'])
+        self.changer   = _get_header(message['X-Roundup-Who'])
+        self.product   = _get_header(message['X-Roundup-Product'])
+        self.component = _get_header(message['X-Roundup-Component'])
+        self.status    = _get_header(message['X-Roundup-Status'])
+        self.severity  = _get_header(message['X-Roundup-Severity'])
+        self.priority  = _get_header(message['X-Roundup-Priority'])
+        self.assignee  = _get_header(message['X-Roundup-Assigned-To'])
         
         # Get the urlbase of the installation
         if 'In-Reply-To' in message:

@@ -1,5 +1,6 @@
 ###
 # Copyright (c) 2007, Max Kanat-Alexander
+# Copyright (c) 2011, Jack Grigg
 # All rights reserved.
 #
 #
@@ -7,10 +8,10 @@
 
 from supybot.test import *
 
-class BugzillaTestCase(ChannelPluginTestCase):
-    plugins = ('Bugzilla')
-    config = {'supybot.plugins.Bugzilla.mbox': 'test/mbox'
-              'supybot.plugins.Bugzilla.reportedChanges': ['All', 'newBug', 
+class RoundupTestCase(ChannelPluginTestCase):
+    plugins = ('Roundup')
+    config = {'supybot.plugins.Roundup.mbox': 'test/mbox'
+              'supybot.plugins.Roundup.reportedChanges': ['All', 'newBug', 
                                                            'newAttach']}
 
 

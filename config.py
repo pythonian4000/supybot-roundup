@@ -1,5 +1,6 @@
 ###
 # Copyright (c) 2007, Max Kanat-Alexander
+# Copyright (c) 2011, Jack Grigg
 # All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
@@ -39,11 +40,11 @@ def configure(advanced):
     # user or not.  You should effect your configuration by manipulating the
     # registry as appropriate.
     from supybot.questions import expect, anything, something, yn
-    conf.registerPlugin('Bugzilla', True)
+    conf.registerPlugin('Roundup', True)
     if yn("""This plugin can show data about bug URLs and numbers mentioned
              in the channel. Do you want this bug snarfer enabled by 
              default?""", default=False):
-        conf.supybot.plugins.Bugzilla.bugSnarfer.setValue(True)
+        conf.supybot.plugins.Roundup.bugSnarfer.setValue(True)
 
 
 class ColorString(registry.OnlySomeStrings):
@@ -55,88 +56,88 @@ class FormatString(registry.CommaSeparatedListOfStrings):
     Value = ColorString
     
 class ValidInstall(registry.String):
-    """You must pick the name of a group from the list of bugzillas."""
+    """You must pick the name of a group from the list of roundups."""
     
     def setValue(self, v):
-        names  = conf.supybot.plugins.Bugzilla.bugzillas()[:]
+        names  = conf.supybot.plugins.Roundup.roundups()[:]
         names.append('')
         if v not in names:
             self.error()
         registry.String.setValue(self, v)
 
-Bugzilla = conf.registerPlugin('Bugzilla')
+Roundup = conf.registerPlugin('Roundup')
 # This is where your configuration variables (if any) should go.  For example:
-# conf.registerGlobalValue(Bugzilla, 'someConfigVariableName',
+# conf.registerGlobalValue(Roundup, 'someConfigVariableName',
 #     registry.Boolean(False, """Help for someConfigVariableName."""))
-conf.registerChannelValue(Bugzilla, 'bugSnarfer',
+conf.registerChannelValue(Roundup, 'bugSnarfer',
     registry.Boolean(False, """Determines whether the bug snarfer will be
-    enabled, such that any Bugzilla URLs and bug ### seen in the channel
+    enabled, such that any Roundup URLs and bug ### seen in the channel
     will have their information reported into the channel."""))
-conf.registerGlobalValue(Bugzilla, 'bugSnarferTimeout',
+conf.registerGlobalValue(Roundup, 'bugSnarferTimeout',
     registry.PositiveInteger(300, 
     """Users often say "bug XXX" several times in a row, in a channel.
     If "bug XXX" has been said in the last (this many) seconds, don't
     fetch its data again. If you change the value of this variable, you
     must reload this plugin for the change to take effect."""))
 
-conf.registerChannelValue(Bugzilla, 'bugFormat',
+conf.registerChannelValue(Roundup, 'bugFormat',
     registry.SpaceSeparatedListOfStrings(['bug_severity', 'priority',
         'target_milestone', 'assigned_to', 'bug_status', 'short_desc'],
     """The fields to list when describing a bug, after the URL."""))
-conf.registerChannelValue(Bugzilla, 'attachFormat',
+conf.registerChannelValue(Roundup, 'attachFormat',
     registry.SpaceSeparatedListOfStrings(['type', 'desc', 'filename'],
     """The fields to list when describing an attachment after announcing
     a change to that attachment."""))
 
-conf.registerGroup(Bugzilla, 'format',
+conf.registerGroup(Roundup, 'format',
     help="""How various messages should be formatted in terms of bold, colors,
          etc.""")
-conf.registerChannelValue(Bugzilla.format, 'change',
+conf.registerChannelValue(Roundup.format, 'change',
     FormatString(['teal'], 
     """When the plugin reports that something has changed on a
                         bug, how should that string be formatted?"""))
-conf.registerChannelValue(Bugzilla.format, 'attachment',
+conf.registerChannelValue(Roundup.format, 'attachment',
     FormatString(['green'], 
     """When the plugin reports the details of an attachment, how should we
     format that string?"""))
-conf.registerChannelValue(Bugzilla.format, 'bug',
+conf.registerChannelValue(Roundup.format, 'bug',
     FormatString(['red'], 
    """When the plugin reports the details of a bug, how should we format 
    that string?"""))
 
-conf.registerChannelValue(Bugzilla, 'queryResultLimit',
+conf.registerChannelValue(Roundup, 'queryResultLimit',
     registry.PositiveInteger(5, 
     """The number of results to show when using the "query" command."""))
 
-conf.registerGlobalValue(Bugzilla, 'mbox', 
+conf.registerGlobalValue(Roundup, 'mbox', 
     registry.String('', """A path to the mbox that we should be watching for
     bugmail.""", private=True))
-conf.registerGlobalValue(Bugzilla, 'mboxPollTimeout',
+conf.registerGlobalValue(Roundup, 'mboxPollTimeout',
     registry.PositiveInteger(10, """How many seconds should we wait between
     polling the mbox?"""))
 
-conf.registerGroup(Bugzilla, 'messages', orderAlphabetically=True, 
+conf.registerGroup(Roundup, 'messages', orderAlphabetically=True, 
     help="""Various messages that can be re-formatted as you wish. If a message
             takes a format string, the available format variables are:
             product, component, bug_id, attach_id, and changer)""")
 
-conf.registerChannelValue(Bugzilla.messages, 'newBug',
+conf.registerChannelValue(Roundup.messages, 'newBug',
     registry.String("New %(product)s bug %(bug_id)d filed by %(changer)s.",
     """What the bot will say when a new bug is filed."""))
-conf.registerChannelValue(Bugzilla.messages, 'newAttachment',
+conf.registerChannelValue(Roundup.messages, 'newAttachment',
     registry.String("%(changer)s added attachment %(attach_id)d to bug %(bug_id)d",
     """What the bot will say when somebody adds a new attachment to a bug."""))
-conf.registerChannelValue(Bugzilla.messages, 'noRequestee',
+conf.registerChannelValue(Roundup.messages, 'noRequestee',
     registry.String('from the wind',
     """How should we describe it when somebody requests a flag without
     specifying a requestee? This should probably start with "from." It
     can also be entirely empty, if you want."""))
 
-conf.registerGlobalValue(Bugzilla, 'bugzillas',
+conf.registerGlobalValue(Roundup, 'roundups',
     registry.SpaceSeparatedListOfStrings([],
-    """The various Bugzilla installations that have been created
+    """The various Roundup installations that have been created
     with the 'add' command."""))
-conf.registerChannelValue(Bugzilla, 'defaultBugzilla',
+conf.registerChannelValue(Roundup, 'defaultRoundup',
         ValidInstall('', """If commands don't specify what installation to use,
         then which installation should we use?"""))
 
