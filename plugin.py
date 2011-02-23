@@ -45,7 +45,7 @@ import supybot.plugins.Web.plugin as Web
 
 import re
 import urllib
-import xml.dom.minidom as minidom
+import csv
 
 import bugmail
 import traceparser
@@ -131,29 +131,6 @@ def _message_factory(fp):
     except email.Errors.MessageParseError:
         # Don't return None since that will
         # stop the mailbox iterator
-        return ''
-
-#######################
-# XML-Parsing Helpers #
-#######################
-
-def _getTagText(bug, field):
-    # XXX This should probably support multiplicable fields
-    node = bug.getElementsByTagName(field)
-    node_text = None
-    if node:
-        node_text = _getXmlText(node)
-        # Include Resolution in status
-        if field == 'bug_status':
-            res_node = bug.getElementsByTagName('resolution')
-            if res_node:
-                node_text += ' ' + _getXmlText(res_node)
-    return node_text
-
-def _getXmlText(node):
-    try:
-        return node[0].childNodes[0].data
-    except:
         return ''
 
 ###################################################
@@ -269,24 +246,19 @@ class RoundupInstall:
                                               % self.name , channel)
         fullTerms = "%s %s" % (terms, baseTerms)
         fullTerms = fullTerms.strip()
-        queryurl = '%sbuglist.cgi?quicksearch=%s&ctype=csv&columnlist=bug_id' \
+        fullTerms = '+'.join(fullTerms.split(' '))
+        queryurl = '%sissue?@action=export_csv&@columns=id&@search_text=%s' \
                    % (self.url, urllib.quote(fullTerms))
-        if not total and limit:
-            queryurl = '%s&limit=%d' % (queryurl, limit)
         
         self.plugin.log.debug('Query: %s' % queryurl)
 
-        bug_csv = utils.web.getUrl(queryurl)
+        bug_csv = utils.web.getUrlFd(queryurl)
         if not bug_csv:
              raise callbacks.Error, 'Got empty CSV'
 
-        if bug_csv.find('DOCTYPE') == -1:
-            bug_ids = bug_csv.split("\n")
-            self.plugin.log.debug('Bug IDs: %r' % bug_ids)
-            del bug_ids[0] # Removes the "bug_id" header.
-        else:
-            # Searching a bug alias will return just that bug.
-            bug_ids = [fullTerms]
+        dict_reader = csv.DictReader(bug_csv)
+        bug_ids = [int(thing['id']) for thing in dict_reader]
+        self.plugin.log.debug('Bug IDs: %r' % bug_ids)
 
         if not bug_ids:
             return ['No results for "%s."' % terms]
@@ -294,25 +266,21 @@ class RoundupInstall:
         if total:
             return ['%d results for "%s."' % (len(bug_ids), terms)]
         else:
+            if limit:
+                bug_ids = bug_ids[:limit]
             return self.getBugs(bug_ids, channel)
 
     def getAttachments(self, attach_ids, channel):
         # The code for getting the title is copied from the Web plugin
-        attach_url = '%sattachment.cgi?id=%s&action=edit'
+        attach_url = '%sfile%s'
         attach_bugs = {}
         lines = []
 
         # Get the bug ID that each bug is on.
         for attach_id in attach_ids:
             my_url = attach_url % (self.url, attach_id)
-            text = utils.web.getUrl(my_url, size=ATTACH_TITLE_SIZE)
-            parser = Web.Title()
-            try:
-                parser.feed(text)
-            except sgmllib.SGMLParseError:
-                self.plugin.log.debug('Encountered a problem parsing %u.', my_url)
-            title  = parser.title.strip()
-            match  = re.search('Attachment.*bug (\d+)', title, re.I)
+            text = utils.web.getUrl(my_url)
+            match  = re.search('link</td><td><a href=\"issue(\d+)', text)
             if not match:
                 err = 'Attachment %s was not found or is not accessible.' \
                        % attach_id
@@ -336,25 +304,26 @@ class RoundupInstall:
         """Returns an array of formatted strings describing the bug ids,
         using preferences appropriate to the passed-in channel."""
 
-        bugs = self._getBugXml(ids)
+        bugs = self._getBugCsv(ids, channel)
         bug_strings = [];
         for bug in bugs:
-            bug_id = bug.getElementsByTagName('bug_id')[0].childNodes[0].data
+            self.plugin.log.debug('Bug items: %s' % bug.items())
+            bug_id = bug['id']
             if show_url:
-                bug_url = '%sshow_bug.cgi?id=%s' \
-                          % (self.url, urllib.quote(bug_id))
+                bug_url = '%sissue%s' \
+                          % (self.url, bug_id)
             else:
-                bug_url = bug_id + ':'
+                bug_url = bug_id
 
-            if bug.hasAttribute('error'):
+            if hasattr(bug, 'error'):
                 bug_strings.append(self._bugError(bug, bug_url))
             else:
                 bug_data = []
-                for field in self.plugin.registryValue('bugFormat', channel):
-                    node_text = _getTagText(bug, field)
-                    if node_text:
-                        bug_data.append(node_text)
-                bug_strings.append('Bug ' + bug_url + ' ' + \
+                for field in self.plugin.registryValue('columns.issue', channel):
+                    field_text = bug[field]
+                    if field_text and field != 'id':
+                        bug_data.append(field + ': ' + field_text)
+                bug_strings.append('Bug ' + bug_url + ' - ' + \
                                    ', '.join(bug_data))
 
         bug_strings = [self.plugin._formatLine(s, channel, 'bug') \
@@ -362,33 +331,30 @@ class RoundupInstall:
         return bug_strings
 
     def getAttachmentsOnBug(self, attach_ids, bug_id, channel, do_error=False):
-        bug = self._getBugXml([bug_id])[0]
-        if bug.hasAttribute('error'):
+        bug = [thing for thing in self._getBugCsv([bug_id], channel)][0]
+        if hasattr(bug, 'error'):
             if do_error:
                 return [self._bugError(bug, bug_id)]
             else:
                 return []
 
-        attachments = bug.getElementsByTagName('attachment')
-        attach_strings = []
         # Sometimes we're passed ints, sometimes strings. We want to always
         # have a list of ints so that "in" works below.
         attach_ids = [int(id) for id in attach_ids]
+        attachments = self._getAttachmentCsv(attach_ids, channel)
+        attach_strings = []
         for attachment in attachments:
-            attach_id = int(_getTagText(attachment, 'attachid'))
+            self.plugin.log.debug('Attachment items: %s' % attachment.items())
+            attach_id = int(attachment['id'])
             if attach_id not in attach_ids: continue
 
-            attach_url = '%sattachment.cgi?id=%s&action=edit' % (self.url,
-                                                                  attach_id)
+            attach_url = '%sfile%s' % (self.url, attach_id)
             attach_data = []
-            for field in self.plugin.registryValue('attachFormat', channel):
-                node_text = _getTagText(attachment, field)
-                if node_text:
-                    if (field == 'type'
-                        and attachment.getAttribute('ispatch') == '1'):
-                        node_text = 'patch'
-                    attach_data.append(node_text)
-            attach_strings.append('Attachment ' + attach_url + ' ' \
+            for field in self.plugin.registryValue('columns.file', channel):
+                field_text = attachment[field]
+                if field_text and field != 'id':
+                    attach_data.append(field + ': ' + field_text)
+            attach_strings.append('Attachment ' + attach_url + ' - ' \
                                   + ', '.join(attach_data))
         attach_strings = [self.plugin._formatLine(s, channel, 'attachment') \
                           for s in attach_strings]
@@ -642,27 +608,35 @@ class RoundupInstall:
     ##############################
     # General Helper Subroutines #
     ##############################
-            
-    def _getBugXml(self, ids):
-        queryurl = self.url \
-                   + 'show_bug.cgi?ctype=xml&excludefield=long_desc' \
-                   + '&excludefield=attachmentdata'
-        for id in ids:
-            queryurl = queryurl + '&id=' + urllib.quote(str(id))
 
-        self.plugin.log.debug('Getting bugs from %s' % queryurl)
+    def _getBugCsv(self, ids, channel):
+        return self._getCsvByIds('issue', ids, channel)
 
-        bugxml = utils.web.getUrl(queryurl)
-        if not bugxml:
-            raise callbacks.Error, 'Got empty bug content'
+    def _getAttachmentCsv(self, ids, channel):
+        return self._getCsvByIds('file', ids, channel)
+
+    def _getCsvByIds(self, classname, ids, channel):
+        columns = self.plugin.registryValue('columns.%s' % classname, channel)
+        # Somethimes ids can be a list of ints or strings, so we use list
+        # comprehension to safeguard join().
+        queryurl = self.url + classname \
+                   + '?@action=export_csv&@filter=id' \
+                   + '&@columns=' + ','.join(columns) \
+                   + '&id=' + ','.join(['%s' % thing for thing in ids])
+
+        self.plugin.log.debug('Getting %ss from %s' % (classname, queryurl))
+
+        querycsv = utils.web.getUrlFd(queryurl)
+        if not querycsv:
+            raise callbacks.Error, 'Got empty %s content' % classname
        
         try: 
-            return minidom.parseString(bugxml).getElementsByTagName('bug')
+            return csv.DictReader(querycsv)
         except Exception:
             return []
 
     def _bugError(self, bug, bug_url):
-        error_type = bug.getAttribute('error')
+        error_type = getattr(bug, 'error')
         if error_type == 'NotFound':
             return 'Bug %s was not found.' % bug_url
         elif error_type == 'NotPermitted':
@@ -692,9 +666,9 @@ class Roundup(callbacks.PluginRegexp):
         for k in irc.state.channels.keys():
             self.saidBugs[k] = TimeoutQueue(sayTimeout)
             self.saidAttachments[k] = TimeoutQueue(sayTimeout)
-        period = self.registryValue('mboxPollTimeout')
-        schedule.addPeriodicEvent(self._pollMbox, period, name=self.name(),
-                                  now=False)
+        #period = self.registryValue('mboxPollTimeout')
+        #schedule.addPeriodicEvent(self._pollMbox, period, name=self.name(),
+        #                          now=False)
         for name in self.registryValue('roundups'):
             registerRoundup(name)
         reload(sys)
@@ -702,7 +676,7 @@ class Roundup(callbacks.PluginRegexp):
 
     def die(self):
         self.__parent.die()
-        schedule.removeEvent(self.name())
+        #schedule.removeEvent(self.name())
 
     def add(self, irc, msg, args, name, url):
         """<name> <url>
@@ -730,6 +704,7 @@ class Roundup(callbacks.PluginRegexp):
         lines = installation.getAttachments(attach_ids, channel)
         for l in lines: irc.reply(l)
     attachment = wrap(attachment, [many(('id','attachment'))])
+    file = attachment
 
     def bug(self, irc, msg, args, bug_id_string):
         """<bug_id> [<bug_ids>]
@@ -745,6 +720,7 @@ class Roundup(callbacks.PluginRegexp):
         for s in bug_strings:
             irc.reply(s)
     bug = wrap(bug, ['text'])
+    issue = bug
 
     def query(self, irc, msg, args, options, query_string):
         """[--total] [--install=<install name>] <search terms>
@@ -777,17 +753,17 @@ class Roundup(callbacks.PluginRegexp):
     query = wrap(query, [getopts({'total' : '', 'install' : 'something'}), 'text'])
 
     def snarfBug(self, irc, msg, match):
-        r"""\b((?P<install>\w+)\b\s*)?(?P<type>bug|attachment)\b[\s#]*(?P<id>\d+)"""
+        r"""\b((?P<install>\w+)\b\s*)?(?P<type>bug|issue|attachment|file)\b[\s#]*(?P<id>\d+)"""
         channel = msg.args[0]
         if not self.registryValue('bugSnarfer', channel): return
 
         id_matches = match.group('id').split()
         type = match.group('type')
         ids = []
-        self.log.debug('Snarfed Bug ID(s): ' + ' '.join(id_matches))
+        self.log.debug('Snarfed ID(s): ' + ' '.join(id_matches))
         # Check if the bug has been already snarfed in the last X seconds
         for id in id_matches:
-            if type.lower() == 'bug': 
+            if type.lower() == 'bug' or type.lower() == 'issue':
                 should_say = self._shouldSayBug(id, channel)
             else: 
                 should_say = self._shouldSayAttachment(id, channel)
@@ -798,7 +774,7 @@ class Roundup(callbacks.PluginRegexp):
 
         self.log.debug('Install: %r' % match.group('install'))
         installation = self._ruOrDefault(match.group('install'), channel)
-        if type.lower() == 'bug': 
+        if type.lower() == 'bug' or type.lower() == 'issue':
             strings = installation.getBugs(ids, channel)
         else: 
             strings = installation.getAttachments(ids, channel)
@@ -807,13 +783,13 @@ class Roundup(callbacks.PluginRegexp):
             irc.reply(s, prefixNick=False)
 
     def snarfBugUrl(self, irc, msg, match):
-        r"(?P<url>https?://\S+/)show_bug.cgi\?id=(?P<bug>\w+)"
+        r"(?P<url>https?://\S+/)issue(?P<bug>\d+)"
         channel = msg.args[0]
         if (not self.registryValue('bugSnarfer', channel)): return
 
         url = match.group('url')
         bug_ids =  match.group('bug').split()
-        self.log.debug('Snarfed Bug IDs from URL: ' + ' '.join(bug_ids))
+        self.log.debug('Snarfed Bug ID(s) from URL(s): ' + ' '.join(bug_ids))
         try:
             installation = self._ruByUrl(url)
         except RoundupNotFound:

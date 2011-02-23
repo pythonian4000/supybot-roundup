@@ -80,12 +80,14 @@ conf.registerGlobalValue(Roundup, 'bugSnarferTimeout',
     fetch its data again. If you change the value of this variable, you
     must reload this plugin for the change to take effect."""))
 
-conf.registerChannelValue(Roundup, 'bugFormat',
-    registry.SpaceSeparatedListOfStrings(['bug_severity', 'priority',
-        'target_milestone', 'assigned_to', 'bug_status', 'short_desc'],
+conf.registerGroup(Roundup, 'columns',
+    help="""What columns should be fetched for various Roundup classes""")
+conf.registerChannelValue(Roundup.columns, 'issue',
+    registry.SpaceSeparatedListOfStrings(['id', 'activity',
+        'title', 'creator', 'assignedto', 'status'],
     """The fields to list when describing a bug, after the URL."""))
-conf.registerChannelValue(Roundup, 'attachFormat',
-    registry.SpaceSeparatedListOfStrings(['type', 'desc', 'filename'],
+conf.registerChannelValue(Roundup.columns, 'file',
+    registry.SpaceSeparatedListOfStrings(['id', 'type', 'name'],
     """The fields to list when describing an attachment after announcing
     a change to that attachment."""))
 

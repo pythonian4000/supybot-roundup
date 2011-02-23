@@ -34,6 +34,8 @@ __url__ = 'http://git.jackgrigg.com/supybot-roundup/'
 
 import config
 import plugin
+import bugmail
+import traceparser
 reload(plugin) # In case we're being reloaded.
 reload(bugmail)
 reload(traceparser)
