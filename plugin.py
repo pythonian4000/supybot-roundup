@@ -717,7 +717,7 @@ class Roundup(callbacks.PluginRegexp):
         #schedule.removeEvent(self.name())
 
     def add(self, irc, msg, args, name, url, username='', password=''):
-        """<name> <url> [<username> <password>]
+        """<name> <url> [<username>] [<password>]
         Lets the bot know about a new Roundup installation that it can
         interact with. Name is the name that you use most commonly to refer
         to this installation--it must not have any spaces. URL is the
