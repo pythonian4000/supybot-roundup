@@ -45,6 +45,7 @@ import supybot.plugins.Web.plugin as Web
 
 import re
 import urllib
+import urllib2
 import csv
 
 import bugmail
@@ -160,7 +161,7 @@ class RoundupName(registry.String):
 class RoundupNames(registry.SpaceSeparatedListOfStrings):
     Value = RoundupName
 
-def registerRoundup(name, url=''):
+def registerRoundup(name, url='', username='', password=''):
     if (not re.match('\w+$', name)):
         s = utils.str.normalizeWhitespace(RoundupName.__doc__)
         raise registry.InvalidRegistryValue("%s (%s)" % (s, name))
@@ -172,9 +173,16 @@ def registerRoundup(name, url=''):
         installation. This must be identical to the urlbase (or sslbase)
         parameter used by the installation. (The url that shows up in 
         emails.) It must end with a forward slash."""))
+    conf.registerGlobalValue(install, 'username', 
+        registry.String(username, """The username to log in as, if any. Note that
+        without a username, some data will be unavailable (like correlating
+        user IDs with usernames).""", private=True))
+    conf.registerGlobalValue(install, 'password', 
+        registry.String(password, """The password to log in with, if any.""",
+            private=True))
     conf.registerChannelValue(install, 'queryTerms',
         registry.String('',
-        """Additional search terms in QuickSearch format, that will be added to
+        """Additional search terms in space-separated format, that will be added to
         every search done with "query" against this installation."""))
 #    conf.registerGlobalValue(install, 'aliases',
 #        RoundupNames([], """Alternate names for this Roundup
@@ -239,6 +247,17 @@ class RoundupInstall:
         #self.aliases = self.conf.aliases()
         #self.aliases.append(name)
         self.plugin = plugin
+        self.opener = urllib2.build_opener(urllib2.HTTPCookieProcessor())
+        urllib2.install_opener(self.opener)
+        if self.conf.username():
+            p = urllib.urlencode({
+                '__login_name': self.conf.username(),
+                '__login_password': self.conf.password(),
+                '@action': 'Login'
+                })
+            f = self.opener.open(self.url, p)
+            data = f.read()
+            f.close()
 
     def query(self, terms, total, channel, limit=None):
         # Build the query URL
@@ -252,11 +271,11 @@ class RoundupInstall:
         
         self.plugin.log.debug('Query: %s' % queryurl)
 
-        bug_csv = utils.web.getUrlFd(queryurl)
-        if not bug_csv:
+        bug_csv_stream = self.opener.open(queryurl)
+        if not bug_csv_stream:
              raise callbacks.Error, 'Got empty CSV'
 
-        dict_reader = csv.DictReader(bug_csv)
+        dict_reader = csv.DictReader(bug_csv_stream)
         bug_ids = [int(thing['id']) for thing in dict_reader]
         self.plugin.log.debug('Bug IDs: %r' % bug_ids)
 
@@ -279,7 +298,9 @@ class RoundupInstall:
         # Get the bug ID that each bug is on.
         for attach_id in attach_ids:
             my_url = attach_url % (self.url, attach_id)
-            text = utils.web.getUrl(my_url)
+            text_stream = self.opener.open(my_url)
+            text = text_stream.read()
+            text_stream.close()
             match  = re.search('link</td><td><a href=\"issue(\d+)', text)
             if not match:
                 err = 'Attachment %s was not found or is not accessible.' \
@@ -320,7 +341,7 @@ class RoundupInstall:
             else:
                 bug_data = []
                 for field in self.plugin.registryValue('columns.issue', channel):
-                    field_text = bug[field]
+                    field_text = self._field_text_to_string(bug, field, channel)
                     if field_text and field != 'id':
                         bug_data.append(field + ': ' + field_text)
                 bug_strings.append('Bug ' + bug_url + ' - ' + \
@@ -609,6 +630,22 @@ class RoundupInstall:
     # General Helper Subroutines #
     ##############################
 
+    def _field_text_to_string(self, obj, field, channel):
+        field_lookup_list = self.plugin.registryValue('fieldLookupList', channel)
+
+        for field_lookup in field_lookup_list:
+            # Get current field, class and classname in the list.
+            (lfield, lclass, lclassfield) = field_lookup.split('.')
+            # See if we have found our field.
+            if field.lower() == lfield:
+                # Found it, so get appropriate data and return appropriate
+                # field.
+                field_csv = self._getCsvByIds(lclass, [obj[field]], channel)
+                return "%s" % [thing for thing in field_csv][0][lclassfield]
+
+        # Didn't find the field so doesn't need reworking.
+        return '%s' % obj[field]
+
     def _getBugCsv(self, ids, channel):
         return self._getCsvByIds('issue', ids, channel)
 
@@ -626,12 +663,12 @@ class RoundupInstall:
 
         self.plugin.log.debug('Getting %ss from %s' % (classname, queryurl))
 
-        querycsv = utils.web.getUrlFd(queryurl)
-        if not querycsv:
+        querycsv_stream = self.opener.open(queryurl)
+        if not querycsv_stream:
             raise callbacks.Error, 'Got empty %s content' % classname
        
         try: 
-            return csv.DictReader(querycsv)
+            return csv.DictReader(querycsv_stream)
         except Exception:
             return []
 
@@ -678,15 +715,15 @@ class Roundup(callbacks.PluginRegexp):
         self.__parent.die()
         #schedule.removeEvent(self.name())
 
-    def add(self, irc, msg, args, name, url):
-        """<name> <url>
+    def add(self, irc, msg, args, name, url, username='', password=''):
+        """<name> <url> [<username> <password>]
         Lets the bot know about a new Roundup installation that it can
         interact with. Name is the name that you use most commonly to refer
         to this installation--it must not have any spaces. URL is the
         urlbase (or sslbase, if the installation uses that) of the
         installation."""
 
-        registerRoundup(name, url)
+        registerRoundup(name, url, username, password)
         roundups = self.registryValue('roundups')
         roundups.append(name.lower())
         self.setRegistryValue('roundups', roundups)

@@ -90,6 +90,26 @@ conf.registerChannelValue(Roundup.columns, 'file',
     registry.SpaceSeparatedListOfStrings(['id', 'type', 'name'],
     """The fields to list when describing an attachment after announcing
     a change to that attachment."""))
+conf.registerChannelValue(Roundup.columns, 'user',
+    registry.SpaceSeparatedListOfStrings(['id', 'username', 'realname'],
+    """The fields to list when describing a user."""))
+conf.registerChannelValue(Roundup.columns, 'status',
+    registry.SpaceSeparatedListOfStrings(['id', 'name'],
+    """The fields to list when describing a user."""))
+conf.registerChannelValue(Roundup.columns, 'milestone',
+    registry.SpaceSeparatedListOfStrings(['id', 'name'],
+    """The fields to list when describing a user."""))
+
+conf.registerChannelValue(Roundup, 'fieldLookupList',
+    registry.SpaceSeparatedListOfStrings([
+        'creator.user.username',
+        'assignedto.user.username',
+        'status.status.name'],
+    """A list of fields for which their string value should be looked up.
+    Format is field.class.classfield (where classfield is the field in the
+    class containing the desired string value). Note that you can only name
+    classes here which have had their columns/class fields set in config.py;
+    this can be added to but it will require that the bot be restarted."""))
 
 conf.registerGroup(Roundup, 'format',
     help="""How various messages should be formatted in terms of bold, colors,
