@@ -631,17 +631,18 @@ class RoundupInstall:
     ##############################
 
     def _field_text_to_string(self, obj, field, channel):
-        field_lookup_list = self.plugin.registryValue('fieldLookupList', channel)
+        if obj[field] and obj[field] != 'None':
+            field_lookup_list = self.plugin.registryValue('fieldLookupList', channel)
 
-        for field_lookup in field_lookup_list:
-            # Get current field, class and classname in the list.
-            (lfield, lclass, lclassfield) = field_lookup.split('.')
-            # See if we have found our field.
-            if field.lower() == lfield:
-                # Found it, so get appropriate data and return appropriate
-                # field.
-                field_csv = self._getCsvByIds(lclass, [obj[field]], channel)
-                return "%s" % [thing for thing in field_csv][0][lclassfield]
+            for field_lookup in field_lookup_list:
+                # Get current field, class and classname in the list.
+                (lfield, lclass, lclassfield) = field_lookup.split('.')
+                # See if we have found our field.
+                if field.lower() == lfield:
+                    # Found it, so get appropriate data and return appropriate
+                    # field.
+                    field_csv = self._getCsvByIds(lclass, [obj[field]], channel)
+                    return "%s" % [thing for thing in field_csv][0][lclassfield]
 
         # Didn't find the field so doesn't need reworking.
         return '%s' % obj[field]
