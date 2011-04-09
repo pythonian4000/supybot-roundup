@@ -791,7 +791,7 @@ class Roundup(callbacks.PluginRegexp):
     query = wrap(query, [getopts({'total' : '', 'install' : 'something'}), 'text'])
 
     def snarfBug(self, irc, msg, match):
-        r"""\b((?P<install>\w+)\b\s*)?(?P<type>bug|issue|attachment|file)\b[\s#]*(?P<id>\d+)"""
+        r"""\b((?P<install>\w+)\b\s*)?(?P<type>bug|issue|attachment|file)(\b[\s#]*|\B)(?P<id>\d+)"""
         channel = msg.args[0]
         if not self.registryValue('bugSnarfer', channel): return
 
